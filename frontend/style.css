@@ -49,3 +49,20 @@ li strong {
     font-style: italic;
     color: #7f8c8d;
 }
+
+.info-box {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    text-align: center;
+    color: #95a5a6;
+}
+
+.info-box a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.info-box a:hover {
+    text-decoration: underline;
+}
