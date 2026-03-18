@@ -9,22 +9,27 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
+type PostbackData struct {
+	Path        string              `json:"path"`
+	QueryParams map[string][]string `json:"query_params"`
+	ReceivedAt  string              `json:"received_at"`
+}
+
 var (
-	latestPostbackData struct {
-		Path        string              `json:"path"`
-		QueryParams map[string][]string `json:"query_params"`
-	}
-	dataMutex sync.RWMutex
+	postbackHistory []PostbackData
+	dataMutex       sync.RWMutex
 )
 
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 		next(w, r)
@@ -36,10 +41,17 @@ func postbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	path := r.URL.Path
 	queryParams := r.URL.Query()
+	receivedAt := time.Now().Format("2006-01-02 15:04:05")
+
+	newData := PostbackData{
+		Path:        path,
+		QueryParams: queryParams,
+		ReceivedAt:  receivedAt,
+	}
 
 	dataMutex.Lock()
-	latestPostbackData.Path = path
-	latestPostbackData.QueryParams = queryParams
+	// Добавляем в начало списка
+	postbackHistory = append([]PostbackData{newData}, postbackHistory...)
 	dataMutex.Unlock()
 
 	w.Header().Set("Content-Type", "text/plain")
@@ -52,7 +64,7 @@ func apiViewHandler(w http.ResponseWriter, r *http.Request) {
 	defer dataMutex.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(latestPostbackData); err != nil {
+	if err := json.NewEncoder(w).Encode(postbackHistory); err != nil {
 		log.Printf("Error encoding JSON: %v", err)
 		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
 	}
@@ -60,8 +72,8 @@ func apiViewHandler(w http.ResponseWriter, r *http.Request) {
 
 func viewHandler(w http.ResponseWriter, r *http.Request) {
 	dataMutex.RLock()
-	defer dataMutex.RUnlock()
-	data := latestPostbackData
+	data := postbackHistory
+	dataMutex.RUnlock()
 
 	tmpl, err := template.New("postback").Parse(`
 <!DOCTYPE html>
@@ -74,28 +86,39 @@ func viewHandler(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
     <div class="container">
-        <h1>AppMetrica Postback Data</h1>
+        <h1>AppMetrica Postback History</h1>
         
-        <h2>Request Path</h2>
-        <p><strong>{{.Path}}</strong></p>
-        
-        <h2>Query Parameters</h2>
-        <ul>
-            {{if .QueryParams}}
-                {{range $key, $values := .QueryParams}}
-                    <li>
-                        <strong>{{$key}}:</strong> 
-                        <span class="param-value">
-                            {{range $values}}
-                                {{.}} 
+        {{if .}}
+            {{range .}}
+                <div class="postback-item" style="border-bottom: 1px solid #ccc; margin-bottom: 20px; padding-bottom: 10px;">
+                    <h2>Request Path</h2>
+                    <p><strong>{{.Path}}</strong></p>
+
+                    <h2>Received At</h2>
+                    <p><strong>{{.ReceivedAt}}</strong></p>
+                    
+                    <h2>Query Parameters</h2>
+                    <ul>
+                        {{if .QueryParams}}
+                            {{range $key, $values := .QueryParams}}
+                                <li>
+                                    <strong>{{$key}}:</strong> 
+                                    <span class="param-value">
+                                        {{range $values}}
+                                            {{.}} 
+                                        {{end}}
+                                    </span>
+                                </li>
                             {{end}}
-                        </span>
-                    </li>
-                {{end}}
-            {{else}}
-                <li>No query parameters received.</li>
+                        {{else}}
+                            <li>No query parameters received.</li>
+                        {{end}}
+                    </ul>
+                </div>
             {{end}}
-        </ul>
+        {{else}}
+            <p>No postbacks received yet.</p>
+        {{end}}
     </div>
 </body>
 </html>
@@ -129,11 +152,34 @@ func main() {
 	http.HandleFunc("/postback", corsMiddleware(postbackHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		if r.URL.Path == "/" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
 			http.ServeFile(w, r, filepath.Join("frontend", "index.html"))
 			return
 		}
+
+		path := r.URL.Path
+		queryParams := r.URL.Query()
+		receivedAt := time.Now().Format("2006-01-02 15:04:05")
+
+		newData := PostbackData{
+			Path:        path,
+			QueryParams: queryParams,
+			ReceivedAt:  receivedAt,
+		}
+
+		dataMutex.Lock()
+		postbackHistory = append([]PostbackData{newData}, postbackHistory...)
+		dataMutex.Unlock()
+
 		fs.ServeHTTP(w, r)
 	})
 
