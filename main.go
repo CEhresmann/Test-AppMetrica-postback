@@ -150,43 +150,23 @@ func main() {
 	http.HandleFunc("/api/view", corsMiddleware(apiViewHandler))
 	http.HandleFunc("/postback", corsMiddleware(postbackHandler))
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
+	http.HandleFunc("/", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
+			if len(r.URL.Query()) > 0 {
+				postbackHandler(w, r)
+				return
+			}
 			http.ServeFile(w, r, filepath.Join("frontend", "index.html"))
 			return
 		}
-		if _, err := os.Stat(filepath.Join("frontend", r.URL.Path)); err == nil {
-			fs.ServeHTTP(w, r)
+
+		if stat, err := os.Stat(filepath.Join("frontend", r.URL.Path)); err == nil && !stat.IsDir() {
+			http.ServeFile(w, r, filepath.Join("frontend", r.URL.Path))
 			return
 		}
 
-		path := r.URL.Path
-		queryParams := r.URL.Query()
-		receivedAt := time.Now().Format("2006-01-02 15:04:05")
-
-		newData := PostbackData{
-			Path:        path,
-			QueryParams: queryParams,
-			ReceivedAt:  receivedAt,
-		}
-
-		dataMutex.Lock()
-		postbackHistory = append([]PostbackData{newData}, postbackHistory...)
-		dataMutex.Unlock()
-
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Postback received successfully!")
-	})
+		postbackHandler(w, r)
+	}))
 
 	log.Printf("Server starting on port %s", port)
 
