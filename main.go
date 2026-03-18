@@ -35,21 +35,16 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 func postbackHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received postback request: %s %s", r.Method, r.URL.String())
 
-	parsedURL, err := url.Parse(r.URL.String())
-	if err != nil {
-		log.Printf("Error parsing URL: %v", err)
-		http.Error(w, "Error parsing URL", http.StatusInternalServerError)
-		return
-	}
-
-	path := parsedURL.Path
-	queryParams := parsedURL.Query()
+	// Используем r.URL напрямую, так как он уже распарсен сервером
+	path := r.URL.Path
+	queryParams := r.URL.Query()
 
 	dataMutex.Lock()
 	latestPostbackData.Path = path
 	latestPostbackData.QueryParams = queryParams
 	dataMutex.Unlock()
 
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Postback received successfully!")
 }
@@ -67,8 +62,8 @@ func apiViewHandler(w http.ResponseWriter, r *http.Request) {
 
 func viewHandler(w http.ResponseWriter, r *http.Request) {
 	dataMutex.RLock()
+	defer dataMutex.RUnlock()
 	data := latestPostbackData
-	dataMutex.RUnlock()
 
 	tmpl, err := template.New("postback").Parse(`
 <!DOCTYPE html>
@@ -142,7 +137,8 @@ func main() {
 			http.ServeFile(w, r, filepath.Join("frontend", "index.html"))
 			return
 		}
-		http.NotFound(w, r)
+		// Если путь не найден, но это не корень, пробуем отдать статику или 404
+		fs.ServeHTTP(w, r)
 	})
 
 	log.Printf("Server starting on port %s", port)

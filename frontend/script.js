@@ -3,18 +3,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const BACKEND_URL = 'https://testpostback-timofey3498.amvera.io';
 
     async function fetchPostbackData() {
+        console.log('Fetching data from:', `${BACKEND_URL}/api/view`);
         try {
             const response = await fetch(`${BACKEND_URL}/api/view`); 
+            console.log('Response status:', response.status);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
+            
+            const contentType = response.headers.get("content-type");
+            console.log('Content-Type:', contentType);
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new TypeError("Ожидался JSON ответ от сервера");
+            }
+
             const data = await response.json();
+            console.log('Data received:', data);
             
             renderData(data);
 
         } catch (error) {
             console.error('Error fetching postback data:', error);
-            postbackInfoDiv.innerHTML = `<p style="color: red;">Error loading postback data: ${error.message}</p>`;
+            postbackInfoDiv.innerHTML = `<p style="color: red;">Error loading postback data: ${error.message}</p>
+            <p><small>Проверьте консоль браузера (F12) для деталей.</small></p>`;
         }
     }
 
