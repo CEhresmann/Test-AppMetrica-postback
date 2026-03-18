@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -8,11 +9,27 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
-var latestPostbackData struct {
-	Path        string
-	QueryParams map[string][]string
+var (
+	latestPostbackData struct {
+		Path        string              `json:"path"`
+		QueryParams map[string][]string `json:"query_params"`
+	}
+	dataMutex sync.RWMutex
+)
+
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			return
+		}
+		next(w, r)
+	}
 }
 
 func postbackHandler(w http.ResponseWriter, r *http.Request) {
@@ -28,26 +45,30 @@ func postbackHandler(w http.ResponseWriter, r *http.Request) {
 	path := parsedURL.Path
 	queryParams := parsedURL.Query()
 
-	latestPostbackData = struct {
-		Path        string
-		QueryParams map[string][]string
-	}{
-		Path:        path,
-		QueryParams: queryParams,
-	}
+	dataMutex.Lock()
+	latestPostbackData.Path = path
+	latestPostbackData.QueryParams = queryParams
+	dataMutex.Unlock()
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Postback received successfully!")
 }
 
-func viewHandler(w http.ResponseWriter, r *http.Request) {
-	data := struct {
-		Path        string
-		QueryParams map[string][]string
-	}{
-		Path:        latestPostbackData.Path,
-		QueryParams: latestPostbackData.QueryParams,
+func apiViewHandler(w http.ResponseWriter, r *http.Request) {
+	dataMutex.RLock()
+	defer dataMutex.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(latestPostbackData); err != nil {
+		log.Printf("Error encoding JSON: %v", err)
+		http.Error(w, "Error encoding JSON", http.StatusInternalServerError)
 	}
+}
+
+func viewHandler(w http.ResponseWriter, r *http.Request) {
+	dataMutex.RLock()
+	data := latestPostbackData
+	dataMutex.RUnlock()
 
 	tmpl, err := template.New("postback").Parse(`
 <!DOCTYPE html>
@@ -106,15 +127,18 @@ func main() {
 		port = "8080"
 		log.Println("PORT environment variable not set, defaulting to 8080")
 	}
+
+	// Статика раздается из папки frontend по пути /static/
 	fs := http.FileServer(http.Dir("frontend"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	http.HandleFunc("/view", viewHandler)
-
-	http.HandleFunc("/postback", postbackHandler)
+	http.HandleFunc("/view", corsMiddleware(viewHandler))
+	http.HandleFunc("/api/view", corsMiddleware(apiViewHandler))
+	http.HandleFunc("/postback", corsMiddleware(postbackHandler))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
 			http.ServeFile(w, r, filepath.Join("frontend", "index.html"))
 			return
 		}

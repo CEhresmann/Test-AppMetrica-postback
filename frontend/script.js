@@ -4,26 +4,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchPostbackData() {
         try {
-            const response = await fetch(`${BACKEND_URL}/view`); 
+            const response = await fetch(`${BACKEND_URL}/api/view`); 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const htmlContent = await response.text();
+            const data = await response.json();
             
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlContent, 'text/html');
-            const container = doc.querySelector('.container');
-            
-            if (container) {
-                postbackInfoDiv.innerHTML = container.innerHTML;
-            } else {
-                postbackInfoDiv.innerHTML = htmlContent;
-            }
+            renderData(data);
 
         } catch (error) {
             console.error('Error fetching postback data:', error);
             postbackInfoDiv.innerHTML = `<p style="color: red;">Error loading postback data: ${error.message}</p>`;
         }
+    }
+
+    function renderData(data) {
+        if (!data || (!data.path && !data.query_params)) {
+            postbackInfoDiv.innerHTML = '<p>Нет данных для отображения.</p>';
+            return;
+        }
+
+        let html = `
+            <div class="data-section">
+                <h3>Path</h3>
+                <p><code>${data.path || '/'}</code></p>
+            </div>
+        `;
+
+        if (data.query_params && Object.keys(data.query_params).length > 0) {
+            html += `
+                <div class="data-section">
+                    <h3>Query Parameters</h3>
+                    <ul>
+            `;
+            for (const [key, value] of Object.entries(data.query_params)) {
+                html += `<li><strong>${key}:</strong> <code>${value}</code></li>`;
+            }
+            html += `
+                    </ul>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="data-section">
+                    <h3>Query Parameters</h3>
+                    <p>Параметры отсутствуют.</p>
+                </div>
+            `;
+        }
+
+        postbackInfoDiv.innerHTML = html;
     }
 
     fetchPostbackData();
