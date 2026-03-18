@@ -50,7 +50,6 @@ func postbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dataMutex.Lock()
-	// Добавляем в начало списка
 	postbackHistory = append([]PostbackData{newData}, postbackHistory...)
 	dataMutex.Unlock()
 
@@ -165,6 +164,10 @@ func main() {
 			http.ServeFile(w, r, filepath.Join("frontend", "index.html"))
 			return
 		}
+		if _, err := os.Stat(filepath.Join("frontend", r.URL.Path)); err == nil {
+			fs.ServeHTTP(w, r)
+			return
+		}
 
 		path := r.URL.Path
 		queryParams := r.URL.Query()
@@ -180,7 +183,9 @@ func main() {
 		postbackHistory = append([]PostbackData{newData}, postbackHistory...)
 		dataMutex.Unlock()
 
-		fs.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "Postback received successfully!")
 	})
 
 	log.Printf("Server starting on port %s", port)

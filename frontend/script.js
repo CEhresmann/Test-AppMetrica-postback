@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const postbackInfoDiv = document.getElementById('postback-info');
+    const errorMessageDiv = document.getElementById('error-message');
     const BACKEND_URL = 'https://testpostback-timofey3498.amvera.io';
 
     async function fetchPostbackData() {
@@ -7,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`${BACKEND_URL}/api/view`); 
             console.log('Response status:', response.status);
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -20,12 +22,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             console.log('Data received:', data);
             
+            errorMessageDiv.style.display = 'none';
             renderData(data);
 
         } catch (error) {
             console.error('Error fetching postback data:', error);
-            postbackInfoDiv.innerHTML = `<p style="color: red;">Error loading postback data: ${error.message}</p>
-            <p><small>Проверьте консоль браузера (F12) для деталей.</small></p>`;
+            errorMessageDiv.textContent = `Ошибка загрузки данных: ${error.message}. Проверьте соединение с бэкендом.`;
+            errorMessageDiv.style.display = 'block';
+            
+            if (postbackInfoDiv.innerHTML.includes('Загрузка')) {
+                postbackInfoDiv.innerHTML = `<p style="color: red;">Не удалось загрузить данные.</p>`;
+            }
         }
     }
 
