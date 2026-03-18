@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -35,7 +34,6 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 func postbackHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received postback request: %s %s", r.Method, r.URL.String())
 
-	// Используем r.URL напрямую, так как он уже распарсен сервером
 	path := r.URL.Path
 	queryParams := r.URL.Query()
 
@@ -123,7 +121,6 @@ func main() {
 		log.Println("PORT environment variable not set, defaulting to 8080")
 	}
 
-	// Статика раздается из папки frontend по пути /static/
 	fs := http.FileServer(http.Dir("frontend"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
@@ -137,7 +134,6 @@ func main() {
 			http.ServeFile(w, r, filepath.Join("frontend", "index.html"))
 			return
 		}
-		// Если путь не найден, но это не корень, пробуем отдать статику или 404
 		fs.ServeHTTP(w, r)
 	})
 
