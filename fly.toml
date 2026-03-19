@@ -1,5 +1,3 @@
-# fly.toml app configuration file generated for appmetrica-postback-viewer
-
 app = "appmetrica-postback-viewer"
 primary_region = "ams"
 
