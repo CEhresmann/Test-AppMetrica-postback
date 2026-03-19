@@ -143,7 +143,7 @@ func main() {
 		log.Println("PORT environment variable not set, defaulting to 8080")
 	}
 
-	fs := http.FileServer(http.Dir("docs"))
+	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	http.HandleFunc("/view", corsMiddleware(viewHandler))
@@ -156,12 +156,12 @@ func main() {
 				postbackHandler(w, r)
 				return
 			}
-			http.ServeFile(w, r, filepath.Join("docs", "index.html"))
+			http.ServeFile(w, r, filepath.Join("static", "index.html"))
 			return
 		}
 
-		if stat, err := os.Stat(filepath.Join("docs", r.URL.Path)); err == nil && !stat.IsDir() {
-			http.ServeFile(w, r, filepath.Join("docs", r.URL.Path))
+		if stat, err := os.Stat(filepath.Join("", r.URL.Path)); err == nil && !stat.IsDir() {
+			http.ServeFile(w, r, filepath.Join("static", r.URL.Path))
 			return
 		}
 
